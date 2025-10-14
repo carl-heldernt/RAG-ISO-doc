@@ -1,0 +1,4 @@
+.env
+
+# local chroma path
+chroma_*
