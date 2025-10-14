@@ -1,0 +1,29 @@
+[project]
+name = "rag-iso-doc"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Yenching Hsu",email = "Yenching_Hsu@asus.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0.0"
+dependencies = [
+    "langchain-community (>=0.3.30,<0.4.0)",
+    "langchain (>=0.3.27,<0.4.0)",
+    "pypdf (>=6.1.1,<7.0.0)",
+    "unstructured[ocr,pdf] (>=0.18.15,<0.19.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "langchain-openai (>=0.3.33,<0.4.0)",
+    "chromadb (>=1.1.0,<2.0.0)",
+    "langchain-chroma (>=0.2.6,<0.3.0)",
+    "pytesseract (>=0.3.13,<0.4.0)",
+    "fastapi (>=0.118.2,<0.119.0)",
+]
+
+[tool.poetry]
+packages = [{include = "rag_iso_doc", from = "src"}]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
