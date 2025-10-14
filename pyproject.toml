@@ -16,6 +16,8 @@ dependencies = [
     "langchain-openai (>=0.3.33,<0.4.0)",
     "chromadb (>=1.1.0,<2.0.0)",
     "langchain-chroma (>=0.2.6,<0.3.0)",
+    "pytesseract (>=0.3.13,<0.4.0)",
+    "fastapi (>=0.118.2,<0.119.0)",
 ]
 
 [tool.poetry]
