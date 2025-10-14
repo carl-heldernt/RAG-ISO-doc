@@ -2,3 +2,7 @@
 
 # local chroma path
 chroma_*
+
+# Python
+__pycache__
+dist
