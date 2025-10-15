@@ -54,13 +54,14 @@ embeddings = AzureOpenAIEmbeddings(
 # Prompt template (bilingual)
 # ------------------------------------------------------------
 prompt = ChatPromptTemplate.from_template("""
-You are an assistant specializing in ISO vibration standards.
+You are an expert assistant.
 
-Use the retrieved text below to answer the question precisely.
+Use the retrieved context below to answer the question precisely.
 If the retrieved text does not contain enough information, respond:
 "Insufficient information found in retrieved documents."
 
-Provide your answer in **bilingual format (English + Traditional Chinese)**.
+Provide the answer in **Bilingual format (English + Traditional Chinese)**.
+Use clear structure with English first, then Traditional Chinese.
 
 Retrieved text:
 {context}
