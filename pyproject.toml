@@ -18,6 +18,7 @@ dependencies = [
     "langchain-chroma (>=0.2.6,<0.3.0)",
     "pytesseract (>=0.3.13,<0.4.0)",
     "fastapi (>=0.118.2,<0.119.0)",
+    "langchain-unstructured (>=0.1.6,<0.2.0)",
 ]
 
 [tool.poetry]
