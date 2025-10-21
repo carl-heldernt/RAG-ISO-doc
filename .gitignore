@@ -6,3 +6,6 @@ chroma_*
 # Python
 __pycache__
 dist
+
+# unstructured cache
+figures
