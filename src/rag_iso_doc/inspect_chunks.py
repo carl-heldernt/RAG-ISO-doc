@@ -1,106 +1,102 @@
-# inspect_chunks.py
-import json
+"""
+Inspect Chroma Collection Chunks
+--------------------------------
+Analyzes and summarizes stored chunks from Chroma DB:
+ - Displays per-document statistics
+ - Shows page-level summaries and metadata
+ - Counts text, diagrams, and average lengths
+"""
+
+import argparse
 import os
-from textwrap import shorten
+import textwrap
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
 from langchain_openai import AzureOpenAIEmbeddings
 
-load_dotenv()
 
-# ---------------------------------------------------------
-# Azure embedding setup
-# ---------------------------------------------------------
-azure_openai_api_key = os.getenv("AZURE_OPENAI_API_KEY")
-azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-azure_openai_api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-azure_openai_embedding_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
-
-if not all([azure_openai_api_key, azure_openai_endpoint, azure_openai_api_version, azure_openai_embedding_deployment]):
-    raise ValueError("❌ Missing Azure OpenAI environment variables. Please check your .env file.")
-
-embeddings = AzureOpenAIEmbeddings(
-    openai_api_key=azure_openai_api_key,
-    azure_endpoint=azure_openai_endpoint,
-    azure_deployment=azure_openai_embedding_deployment,
-    openai_api_version=azure_openai_api_version,
-)
-
-# ---------------------------------------------------------
-# Utility: detect and pretty-print JSON values
-# ---------------------------------------------------------
-def pretty_metadata(meta: dict, indent: int = 2) -> str:
-    """Decode JSON-encoded values and return formatted string."""
-    pretty = {}
-    for k, v in meta.items():
-        if isinstance(v, str):
-            try:
-                # Try decoding JSON string (if stored that way)
-                parsed = json.loads(v)
-                pretty[k] = parsed
-            except Exception:
-                pretty[k] = v
-        else:
-            pretty[k] = v
-    return json.dumps(pretty, ensure_ascii=False, indent=indent)
+def load_env_var(key: str, required: bool = True) -> str:
+    load_dotenv()
+    val = os.getenv(key)
+    if not val and required:
+        raise ValueError(f"❌ Missing environment variable: {key}")
+    return val
 
 
-# ---------------------------------------------------------
-# Inspect stored chunks
-# ---------------------------------------------------------
-def inspect_chunks(source_name: str, persist_dir: str = "./chroma_db", collection_name: str = "iso_docs", limit: int = 5):
-    """Print all chunks (or sample) for a given source document."""
+def preview_text(text: str, width=80, max_lines=5):
+    wrapped = textwrap.fill(text.strip().replace("\n", " "), width)
+    lines = wrapped.split("\n")
+    if len(lines) > max_lines:
+        lines = lines[:max_lines] + ["... (truncated) ..."]
+    return "\n".join(lines)
+
+
+def inspect_collection(persist_dir: str, collection: str):
+    azure_key = load_env_var("AZURE_OPENAI_API_KEY")
+    azure_endpoint = load_env_var("AZURE_OPENAI_ENDPOINT")
+    azure_emb_deploy = load_env_var("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
+
+    embeddings = AzureOpenAIEmbeddings(
+        openai_api_key=azure_key,
+        azure_endpoint=azure_endpoint,
+        azure_deployment=azure_emb_deploy,
+    )
+
     vectordb = Chroma(
-        collection_name=collection_name,
+        collection_name=collection,
         persist_directory=persist_dir,
         embedding_function=embeddings,
     )
 
-    print(f"📂 Inspecting Chroma collection '{collection_name}' (dir={persist_dir})")
-    data = vectordb.get()
-
-    docs = data.get("documents", [])
-    metas = data.get("metadatas", [])
-    ids = data.get("ids", [])
-
-    matched = []
-    for i, m in enumerate(metas):
-        if not m:
-            continue
-        src = str(m.get("source", "")).lower()
-        if source_name.lower() in src:
-            matched.append((ids[i], docs[i], m))
-
-    if not matched:
-        print(f"⚠️ No chunks found for source containing '{source_name}'")
+    data = vectordb.get(include=["metadatas", "documents"])
+    if not data["documents"]:
+        print("⚠️ No documents found in collection.")
         return
 
-    print(f"✅ Found {len(matched)} chunks for source '{source_name}'\n")
+    # -------------------------------
+    # Aggregate stats
+    # -------------------------------
+    doc_count = len(data["documents"])
+    avg_len = sum(len(t) for t in data["documents"]) / doc_count
+    pages_with_visuals = sum(
+        1 for m in data["metadatas"] if "Table" in str(m) or "Image" in str(m)
+    )
 
-    for idx, (doc_id, content, meta) in enumerate(matched[:limit]):
-        print("=" * 80)
-        print(f"🧩 Chunk #{idx+1} | ID: {doc_id}")
-        print(f"📄 Content (truncated): {shorten(content, width=300, placeholder='...')}")
-        print("📑 Metadata:")
-        print(pretty_metadata(meta, indent=4))
-        print("=" * 80 + "\n")
+    print(f"\n📚 Collection: {collection}")
+    print(f"📁 Persist dir: {persist_dir}")
+    print(f"🧩 Total chunks: {doc_count}")
+    print(f"🧮 Avg length: {avg_len:.1f} chars")
+    print(f"🖼️ Chunks containing diagrams/tables: {pages_with_visuals}")
+    print("=" * 80)
 
-    if len(matched) > limit:
-        print(f"💡 Showing first {limit} chunks out of {len(matched)} total.\nUse --limit to see more.")
+    # -------------------------------
+    # Group by source and page
+    # -------------------------------
+    grouped = {}
+    for text, meta in zip(data["documents"], data["metadatas"]):
+        src = meta.get("source", "unknown")
+        pg = meta.get("page_number", -1)
+        grouped.setdefault(src, {}).setdefault(pg, []).append((text, meta))
+
+    for src, pages in grouped.items():
+        print(f"\n📘 Document: {src} ({len(pages)} pages)")
+        print("-" * 80)
+        for page, chunks in sorted(pages.items()):
+            combined = "\n".join(t for t, _ in chunks)
+            meta = chunks[0][1]
+            types = meta.get("element_types", [])
+            print(f"\n📄 Page {page} | Types: {types}")
+            print(preview_text(combined))
+            print("-" * 80)
+
+    print("\n✅ Inspection completed.")
 
 
-# ---------------------------------------------------------
-# CLI
-# ---------------------------------------------------------
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Inspect chunks in Chroma DB for a specific source file")
-    parser.add_argument("--source", required=True, help="Substring of source filename (case-insensitive)")
-    parser.add_argument("--persist_dir", default="./chroma_db", help="Chroma persistence directory")
-    parser.add_argument("--collection", default="iso_docs", help="Chroma collection name")
-    parser.add_argument("--limit", type=int, default=5, help="Max number of chunks to display")
+    parser = argparse.ArgumentParser(description="Inspect Chroma Collection Chunks")
+    parser.add_argument("--persist_dir", default="./chroma_db", help="Path to Chroma DB directory")
+    parser.add_argument("--collection", default="iso_docs", help="Collection name to inspect")
     args = parser.parse_args()
 
-    inspect_chunks(args.source, args.persist_dir, args.collection, args.limit)
+    inspect_collection(args.persist_dir, args.collection)
